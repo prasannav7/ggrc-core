@@ -3,7 +3,13 @@
 # Created By: dan@reciprocitylabs.com
 # Maintained By: miha@reciprocitylabs.com
 
+"""ggrc.views
+Handle non-RESTful views, e.g. routes which return HTML rather than JSON
+"""
+
+import collections
 import json
+
 from flask import flash
 from flask import g
 from flask import render_template
@@ -14,9 +20,9 @@ from ggrc import models
 from ggrc import settings
 from ggrc.app import app
 from ggrc.app import db
-from ggrc.converters import get_importables, get_exportables
 from ggrc.builder.json import publish
 from ggrc.builder.json import publish_representation
+from ggrc.converters import get_importables, get_exportables
 from ggrc.extensions import get_extension_modules
 from ggrc.fulltext import get_indexer
 from ggrc.fulltext.recordbuilder import fts_record_for
@@ -24,26 +30,23 @@ from ggrc.fulltext.recordbuilder import model_is_indexed
 from ggrc.login import get_current_user
 from ggrc.login import login_required
 from ggrc.models import all_models
-from ggrc.models.reflection import AttributeInfo
 from ggrc.models.background_task import create_task
 from ggrc.models.background_task import make_task_response
 from ggrc.models.background_task import queued_task
+from ggrc.models.reflection import AttributeInfo
 from ggrc.rbac import permissions
 from ggrc.services.common import as_json
 from ggrc.services.common import inclusion_filter
+from ggrc.views import converters
+from ggrc.views import cron
 from ggrc.views import filters
 from ggrc.views import mockups
-from ggrc.views import converters
+from ggrc.views import notifications
 from ggrc.views.common import RedirectedPolymorphView
 from ggrc.views.registry import object_view
 
 
-"""ggrc.views
-Handle non-RESTful views, e.g. routes which return HTML rather than JSON
-"""
-
 # Needs to be secured as we are removing @login_required
-
 
 @app.route("/_background_tasks/reindex", methods=["POST"])
 @queued_task
@@ -57,6 +60,7 @@ def reindex(_):
   return app.make_response((
       'success', 200, [('Content-Type', 'text/html')]))
 
+
 def do_reindex():
   """
   update the full text search index
@@ -68,13 +72,12 @@ def do_reindex():
   # Find all models then remove base classes
   #   (If we don't remove base classes, we get duplicates in the index.)
   inheritance_base_models = [
-      all_models.Directive, all_models.SystemOrProcess,
-      all_models.Response
+      all_models.Directive, all_models.SystemOrProcess
   ]
-  models = set(all_models.all_models) - set(inheritance_base_models)
-  models = [model for model in models if model_is_indexed(model)]
+  models_ = set(all_models.all_models) - set(inheritance_base_models)
+  models_ = [model for model in models_ if model_is_indexed(model)]
 
-  for model in models:
+  for model in models_:
     mapper_class = model._sa_class_manager.mapper.base_mapper.class_
     query = model.query.options(
         db.undefer_group(mapper_class.__name__ + '_complete'),
@@ -115,7 +118,8 @@ def get_attributes_json():
   attrs = models.CustomAttributeDefinition.eager_query().all()
   published = []
   for attr in attrs:
-    published.append(publish_representation(publish(attr)))
+    published.append(publish(attr))
+  published = publish_representation(published)
   return as_json(published)
 
 
@@ -124,8 +128,8 @@ def get_import_types(export_only=False):
   data = []
   for model in set(types().values()):
     data.append({
-      "model_singular": model.__name__,
-      "title_plural": model._inflector.title_plural
+        "model_singular": model.__name__,
+        "title_plural": model._inflector.title_plural
     })
   data.sort()
   response_json = json.dumps(data)
@@ -135,8 +139,10 @@ def get_import_types(export_only=False):
 def get_export_definitions():
   return get_import_types(export_only=True)
 
+
 def get_import_definitions():
   return get_import_types(export_only=False)
+
 
 def get_all_attributes_json():
   """Get a list of all attribute definitions
@@ -145,8 +151,12 @@ def get_all_attributes_json():
   attributies and mapping attributes, that are used in csv import and export.
   """
   published = {}
+  ca_cache = collections.defaultdict(list)
+  for attr in models.CustomAttributeDefinition.eager_query().all():
+    ca_cache[attr.definition_type].append(attr)
   for model in all_models.all_models:
-    published[model.__name__] = AttributeInfo.get_attr_definitions_array(model)
+    published[model.__name__] = \
+        AttributeInfo.get_attr_definitions_array(model, ca_cache=ca_cache)
   return as_json(published)
 
 
@@ -231,6 +241,13 @@ def admin():
   return render_template("admin/index.haml")
 
 
+@app.route("/assessments_view")
+@login_required
+def assessments_view():
+  """The clutter-free list of all Person's Assessments"""
+  return render_template("assessments_view/index.haml")
+
+
 @app.route("/background_task/<id_task>", methods=['GET'])
 def get_task_response(id_task):
   """Gets the status of a background task"""
@@ -253,6 +270,7 @@ def contributed_object_views():
       object_view(models.Section),
       object_view(models.Control),
       object_view(models.Assessment),
+      object_view(models.AssessmentTemplate),
       object_view(models.Objective),
       object_view(models.System),
       object_view(models.Process),
@@ -284,7 +302,7 @@ def all_object_views():
   return views
 
 
-def init_extra_views(_):
+def init_extra_views(app_):
   """Init any extra views needed by the app
 
   This should be used for any views that might use extension modules.
@@ -292,23 +310,25 @@ def init_extra_views(_):
   mockups.init_mockup_views()
   filters.init_filter_views()
   converters.init_converter_views()
+  cron.init_cron_views(app_)
+  notifications.init_notification_views(app_)
 
 
-def init_all_views(app):
+def init_all_views(app_):
   """Inits all views defined in the core module and submodules"""
   for entry in all_object_views():
     entry.service_class.add_to(
-        app,
+        app_,
         '/{0}'.format(entry.url),
         entry.model_class,
         decorators=(login_required,)
     )
 
-  init_extra_views(app)
+  init_extra_views(app_)
   for extension_module in get_extension_modules():
     ext_extra_views = getattr(extension_module, "init_extra_views", None)
     if ext_extra_views:
-      ext_extra_views(app)
+      ext_extra_views(app_)
 
 
 @app.route("/permissions")

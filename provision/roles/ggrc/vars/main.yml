@@ -15,7 +15,6 @@ ggrc_packages:
   - name: python-imaging
   - name: sqlite3
   - name: python-dev
-  - name: ruby
   - name: nodejs
 
 ggrc_development_directories:
@@ -23,27 +22,6 @@ ggrc_development_directories:
   - name: /vagrant-dev/opt
   - name: /vagrant-dev/tmp
   - name: /vagrant/tmp
-
-ggrc_global_npm_modules:
-  - name: nodeunit
-  - name: pegjs
-  - name: karma-cli
-  - name: karma-junit-reporter
-  - name: jasmine-core
-  - name: mkdirp
-  - name: bower
-  - name: eslint
-  - name: eslint-config-google
-
-ggrc_local_npm_modules:
-  - name: karma
-  - name: karma-jasmine
-
-ggrc_gems:
-  - name: 'sass'
-    version: '3.2.13'
-  - name: 'compass'
-    version: '0.12.2'
 
 ggrc_databases:
   - name: ggrcdev

@@ -2,31 +2,47 @@
 # Licensed under http://www.apache.org/licenses/LICENSE-2.0 <see LICENSE file>
 # Created By: jernej@reciprocitylabs.com
 # Maintained By: jernej@reciprocitylabs.com
+"""Here we import all settings from config files"""
 
 import os
 import logging
-from ast import literal_eval
-from lib import constants, file_ops
+import ConfigParser
+
+from lib import constants
 
 
 PROJECT_ROOT_PATH = os.path.dirname(os.path.abspath(__file__)) + "/../../../"
 VIRTENV_PATH = PROJECT_ROOT_PATH + constants.path.VIRTUALENV_DIR
-
-_config_file_path = PROJECT_ROOT_PATH + constants.path.RESOURCES \
-    + constants.path.YAML
-_yaml = file_ops.load_yaml_contents(_config_file_path)
-LOGGING_FORMAT = _yaml[constants.yaml.LOGGING][constants.yaml.FORMAT]
-LOGGING_LEVEL = _yaml[constants.yaml.LOGGING][constants.yaml.LEVEL]
-CHROME_DRIVER_PATH = _yaml[constants.yaml.WEBDRIVER][constants.yaml.PATH]
-APP_URL = _yaml[constants.yaml.APP][constants.yaml.URL]
-SERVER_WAIT_TIME = _yaml[constants.yaml.APP][constants.yaml.WAIT_TIME]
-DISPLAY_WINDOWS = _yaml[constants.yaml.BROWSER][constants.yaml.DISPLAY]
-WINDOW_RESOLUTION = literal_eval(_yaml[constants.yaml.BROWSER][
-    constants.yaml.RESOLUTION])
-
 LOG_PATH = PROJECT_ROOT_PATH + constants.path.LOGS_DIR
-# register loggers
-selenium_logger = logging.getLogger(constants.log.SELENIUM_REMOTE_CONNECTION)
 
-# Only display possible problems
-selenium_logger.setLevel(logging.DEBUG)
+
+def _get_settings(path):
+  settings = ConfigParser.ConfigParser()
+  settings.read(path)
+  return settings
+
+
+def _set_loggers(settings):
+  logging_level = int(settings.get(
+      constants.settings.Section.LOGGING, constants.settings.Values.LEVEL))
+  selenium_logger = logging.getLogger(constants.log.SELENIUM_REMOTE_CONNECTION)
+  selenium_logger.setLevel(logging_level)
+
+
+def _get_base_url(settings):
+  base_url = settings.get(
+      constants.settings.Section.PYTEST, constants.settings.Values.BASE_URL)
+  return base_url if base_url.endswith("/") else base_url + "/"
+
+
+_settings = _get_settings(PROJECT_ROOT_PATH + constants.path.CONFIG)
+APP_URL = _get_base_url(_settings)
+SERVER_WAIT_TIME = int(_settings.get(
+    constants.settings.Section.APP,
+    constants.settings.Values.WAIT_FOR_APP_SERVER))
+RERUN_FAILED_TEST = int(_settings.get(
+    constants.settings.Section.PYTEST,
+    constants.settings.Values.RERUN_FAILED_TEST))
+
+# register loggers
+_set_loggers(_settings)

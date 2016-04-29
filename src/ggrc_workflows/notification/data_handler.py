@@ -9,11 +9,14 @@ from sqlalchemy import and_
 from urlparse import urljoin
 
 from ggrc import db
+from ggrc import utils
+from ggrc.models.revision import Revision
+from ggrc.notifications import data_handlers
 from ggrc.utils import merge_dicts, get_url_root
 from ggrc_basic_permissions.models import Role, UserRole
-from ggrc_workflows.models import (
-    Workflow, Cycle, CycleTaskGroupObjectTask, TaskGroupTask
-)
+from ggrc_workflows.models import Cycle
+from ggrc_workflows.models import CycleTaskGroupObjectTask
+from ggrc_workflows.models import Workflow
 
 
 """
@@ -34,8 +37,8 @@ def get_cycle_created_task_data(notification):
 
   force = cycle.workflow.notify_on_change
 
-  task_assignee = get_person_dict(cycle_task.contact)
-  task_group_assignee = get_person_dict(cycle_task_group.contact)
+  task_assignee = data_handlers.get_person_dict(cycle_task.contact)
+  task_group_assignee = data_handlers.get_person_dict(cycle_task_group.contact)
   workflow_owners = get_workflow_owners_dict(cycle.context_id)
   task = {
       cycle_task.id: get_cycle_task_dict(cycle_task)
@@ -99,7 +102,7 @@ def get_cycle_task_due(notification):
   force = cycle_task.cycle_task_group.cycle.workflow.notify_on_change
   return {
       cycle_task.contact.email: {
-          "user": get_person_dict(cycle_task.contact),
+          "user": data_handlers.get_person_dict(cycle_task.contact),
           "force_notifications": {
               notification.id: force
           },
@@ -140,7 +143,7 @@ def get_cycle_created_data(notification, cycle):
 
   for person in cycle.workflow.people:
     result[person.email] = {
-        "user": get_person_dict(person),
+        "user": data_handlers.get_person_dict(person),
         "force_notifications": {
             notification.id: force
         },
@@ -173,7 +176,7 @@ def get_cycle_task_declined_data(notification):
   force = cycle_task.cycle_task_group.cycle.workflow.notify_on_change
   return {
       cycle_task.contact.email: {
-          "user": get_person_dict(cycle_task.contact),
+          "user": data_handlers.get_person_dict(cycle_task.contact),
           "force_notifications": {
               notification.id: force
           },
@@ -220,7 +223,7 @@ def get_workflow_starts_in_data(notification, workflow):
 
   for wf_person in workflow.workflow_people:
     result[wf_person.person.email] = {
-        "user": get_person_dict(wf_person.person),
+        "user": data_handlers.get_person_dict(wf_person.person),
         "force_notifications": {
             notification.id: force
         },
@@ -229,7 +232,7 @@ def get_workflow_starts_in_data(notification, workflow):
                 "workflow_owners": workflow_owners,
                 "workflow_url": get_workflow_url(workflow),
                 "start_date": workflow.next_cycle_start_date,
-                "fuzzy_start_date": get_fuzzy_date(
+                "fuzzy_start_date": utils.get_fuzzy_date(
                     workflow.next_cycle_start_date),
                 "custom_message": workflow.notify_custom_message,
                 "title": workflow.title,
@@ -261,7 +264,7 @@ def get_cycle_start_failed_data(notification, workflow):
                 "workflow_owners": workflow_owners,
                 "workflow_url": get_workflow_url(workflow),
                 "start_date": workflow.next_cycle_start_date,
-                "fuzzy_start_date": get_fuzzy_date(
+                "fuzzy_start_date": utils.get_fuzzy_date(
                     workflow.next_cycle_start_date),
                 "custom_message": workflow.notify_custom_message,
                 "title": workflow.title,
@@ -296,53 +299,70 @@ def get_object(obj_class, obj_id):
   return None
 
 
-def get_fuzzy_date(end_date):
-  delta = end_date - date.today()
-  if delta.days < 0:
-    days = abs(delta.days)
-    return "{} day{} ago".format(days, "s" if days > 1 else "")
-  if delta.days == 0:
-    return "today"
-  # TODO: use format_timedelta from babel package.
-  return "in {} day{}".format(delta.days, "s" if delta.days > 1 else "")
-
-
 def get_workflow_owners_dict(context_id):
   owners = db.session.query(UserRole).join(Role).filter(
       and_(UserRole.context_id == context_id,
            Role.name == "WorkflowOwner")).all()
-  return {user_role.person.id: get_person_dict(user_role.person)
+  return {user_role.person.id: data_handlers.get_person_dict(user_role.person)
           for user_role in owners}
+
+
+def _get_object_info_from_revision(revision, known_type):
+  """ returns type and id of the searched object, if we have one part of
+  the relationship known.
+  """
+  object_type = revision.destination_type \
+      if revision.source_type == known_type \
+      else revision.source_type
+  object_id = revision.destination_id if \
+      revision.source_type == known_type \
+      else revision.source_id
+  return object_type, object_id
 
 
 def get_cycle_task_dict(cycle_task):
 
-  object_title = ""
-  if cycle_task.cycle_task_group_object:
-    if cycle_task.cycle_task_group_object.object:
-      object_title = cycle_task.cycle_task_group_object.object.title
-    else:
-      object_title = u"{} [deleted]".format(
-          cycle_task.cycle_task_group_object.title)
+  object_titles = []
+  # every object should have a title or at least a name like person object
+  for related_object in cycle_task.related_objects:
+    object_titles.append(related_object.title or
+                         related_object.name or
+                         u"Untitled object")
+  # related objects might have been deleted or unmapped,
+  # check the revision history
+  deleted_relationships_sources = db.session.query(Revision).filter(
+      Revision.resource_type == "Relationship",
+      Revision.action == "deleted",
+      Revision.source_type == "CycleTaskGroupObjectTask",
+      Revision.source_id == cycle_task.id
+  )
+  deleted_relationships_destinations = db.session.query(Revision).filter(
+      Revision.resource_type == "Relationship",
+      Revision.action == "deleted",
+      Revision.destination_type == "CycleTaskGroupObjectTask",
+      Revision.destination_id == cycle_task.id
+  )
+  deleted_relationships = deleted_relationships_sources.union(
+      deleted_relationships_destinations).all()
+  for deleted_relationship in deleted_relationships:
+    removed_object_type, removed_object_id = _get_object_info_from_revision(
+        deleted_relationship, "CycleTaskGroupObjectTask")
+    object_data = db.session.query(Revision).filter(
+        Revision.resource_type == removed_object_type,
+        Revision.resource_id == removed_object_id,
+    ).one()
+
+    object_titles.append(
+        u"{} [removed from task]".format(object_data.content["display_name"])
+    )
 
   return {
       "title": cycle_task.title,
-      "object_title": object_title,
+      "related_objects": object_titles,
       "end_date": cycle_task.end_date.strftime("%m/%d/%Y"),
-      "fuzzy_due_in": get_fuzzy_date(cycle_task.end_date),
+      "fuzzy_due_in": utils.get_fuzzy_date(cycle_task.end_date),
       "cycle_task_url": get_cycle_task_url(cycle_task),
   }
-
-
-def get_person_dict(person):
-  if person:
-    return {
-        "email": person.email,
-        "name": person.name,
-        "id": person.id,
-    }
-
-  return {"email": "", "name": "", "id": -1}
 
 
 def get_cycle_dict(cycle, manual=False):

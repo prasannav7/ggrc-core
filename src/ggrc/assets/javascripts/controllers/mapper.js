@@ -5,36 +5,55 @@
     Maintained By: ivan@reciprocitylabs.com
 */
 
-(function(can, $) {
-  can.Control("GGRC.Controllers.MapperModal", {
+(function (can, $) {
+  var selectors = _.map(['unified-mapper', 'unified-search'], function (val) {
+    return '[data-toggle="' + val + '"]';
+  });
+
+  can.Control('GGRC.Controllers.MapperModal', {
     defaults: {
-      component: GGRC.mustache_path + "/modals/mapper/component.mustache"
+      component: GGRC.mustache_path + '/modals/mapper/component.mustache'
     },
     launch: function ($trigger, options) {
-      var href = $trigger.attr("data-href") || $trigger.attr("href"),
-          modal_id = "ajax-modal-" + href.replace(/[\/\?=\&#%]/g, "-").replace(/^-/, ""),
-          $target = $('<div id="' + modal_id + '" class="modal modal-selector hide"></div>');
+      var href = $trigger.attr('data-href') || $trigger.attr('href');
+      var modalId = 'ajax-modal-' + (href || '').replace(/[\/\?=\&#%]/g, '-').replace(/^-/, '');
+      var $target = $('<div id="' + modalId + '" class="modal modal-selector hide"></div>');
 
       $target.modal_form({}, $trigger);
-      this.newInstance($target[0], $.extend({ $trigger: $trigger}, options));
+      this.newInstance($target[0], $.extend({
+        $trigger: $trigger
+      }, options));
       return $target;
     }
   }, {
-    init: function() {
+    init: function () {
       this.element.html(can.view(this.options.component, this.options));
     }
   });
 
-  can.Component.extend({
-    tag: "lazy-openclose",
-    scope: {
-      show: false,
-    },
-    content: "<content/>",
-    init: function() {
-      this._control.element.closest(".tree-item").find(".openclose").bind("click", function() {
-        this.scope.attr("show", true);
-      }.bind(this));
+  $('body').on('click', selectors.join(', '), function (ev) {
+    var btn = $(ev.currentTarget);
+    var data = {};
+    var isSearch;
+    ev.preventDefault();
+
+    _.each(btn.data(), function (val, key) {
+      data[can.camelCaseToUnderscore(key)] = val;
+    });
+
+    if (data.tooltip) {
+      data.tooltip.hide();
     }
+    isSearch = /unified-search/ig.test(data.toggle);
+    GGRC.Controllers.MapperModal.launch(btn, _.extend({
+      object: btn.data('join-object-type'),
+      type: btn.data('join-option-type'),
+      'join-object-id': btn.data('join-object-id'),
+      'search-only': isSearch,
+      template: {
+        title: isSearch ?
+          '/static/mustache/base_objects/modal/search_title.mustache' : ''
+      }
+    }, data));
   });
 })(window.can, window.can.$);

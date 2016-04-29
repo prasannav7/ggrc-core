@@ -61,7 +61,9 @@
         && !/^\d+-\d+-\d+$/.test(date) && !/^\d+\/\d+\/\d+$/.test(date)
         //  Don't correct timezone if `moment.js` has already done it
         && !/[-+]\d\d:?\d\d/.test(date)) {
-      ret.subtract(new Date().getTimezoneOffset(), 'minute');
+      // Use the UTC offset that was active at the moment in time to correct
+      // the date's timezone.
+      ret.add(ret.utcOffset(), 'minute');
     }
 
     if (oldValue && oldValue.getTime
@@ -731,21 +733,28 @@ can.Model("can.Model.Cacheable", {
         }
       }
     });
-  }
-  , load_custom_attribute_definitions: function custom_attribute_definitions() {
+  },
+  load_custom_attribute_definitions: function () {
     var definitions;
     if (this.attr('custom_attribute_definitions')) {
       return;
     }
-    definitions = can.map(GGRC.custom_attr_defs, function(def) {
-      if (def.definition_type && def.definition_type === this.constructor.table_singular) {
+    if (GGRC.custom_attr_defs === undefined) {
+      GGRC.custom_attr_defs = {};
+      console.warn("Missing injected custom attribute definitions");
+    }
+    definitions = can.map(GGRC.custom_attr_defs, function (def) {
+      var idCheck = !def.definition_id || def.definition_id === this.id;
+      if (idCheck && def.definition_type === this.constructor.table_singular) {
         return def;
       }
     }.bind(this));
     this.attr('custom_attribute_definitions', definitions);
-  }
-  , setup_custom_attributes: function setup_custom_attributes() {
-    var self = this, key;
+  },
+
+  setup_custom_attributes: function () {
+    var self = this;
+    var key;
 
     // Remove existing custom_attribute validations,
     // some of them might have changed
@@ -754,26 +763,63 @@ can.Model("can.Model.Cacheable", {
         delete this.class.validations[key];
       }
     }
-    can.each(this.custom_attribute_definitions, function(definition) {
-      if (definition.mandatory) {
-        if (definition.attribute_type === 'Checkbox') {
+    can.each(this.custom_attribute_definitions, function (definition) {
 
-          self.class.validate('custom_attributes.' + definition.id, function(val){
-            return !val;
-          });
+      if (definition.mandatory && !this.ignore_ca_errors) {
+        if (definition.attribute_type === 'Checkbox') {
+          self.class.validate('custom_attributes.' + definition.id,
+              function (val) {
+                return !val;
+              });
         } else {
           self.class.validateNonBlank('custom_attributes.' + definition.id);
         }
       }
-    });
+    }.bind(this));
     if (!this.custom_attributes) {
       this.attr('custom_attributes', new can.Map());
-      can.each(this.custom_attribute_values, function(value) {
-        value = value.reify();
-        self.custom_attributes.attr(value.custom_attribute_id, value.attribute_value);
-      });
+      can.each(this.custom_attribute_values, function (value) {
+        var def;
+        var attributeValue;
+        var object;
+        var stub = value;
+        value = stub.reify();
+        def = _.find(this.custom_attribute_definitions, {
+          id: value.custom_attribute_id
+        });
+        if (def) {
+          if (def.attribute_type.startsWith('Map:')) {
+            object = value.attribute_object;
+            attributeValue = object.type + ':' + object.id;
+          } else {
+            attributeValue = value.attribute_value;
+          }
+          self.custom_attributes.attr(value.custom_attribute_id,
+                                      attributeValue);
+        }
+      }.bind(this));
+    }
+  },
+
+  _custom_attribute_map: function (attrId, object) {
+    var definition;
+    attrId = Number(attrId); // coming from mustache this will be a string
+    definition = _.find(this.custom_attribute_definitions, {id: attrId});
+
+    if (!definition || !definition.attribute_type.startsWith('Map:')) {
+      return;
+    }
+    if (typeof object === 'string' && object.length > 0) {
+      return;
+    }
+    object = object.stub ? object.stub() : undefined;
+    if (object) {
+      this.custom_attributes.attr(attrId, object.type + ':' + object.id);
+    } else {
+      this.custom_attributes.removeAttr(String(attrId));
     }
   }
+
   , computed_errors : can.compute(function() {
       var errors = this.errors();
       if(this.attr("_suppress_errors")) {
@@ -1169,9 +1215,16 @@ can.Model("can.Model.Cacheable", {
       this.setup_custom_attributes();
     }
     can.each(this.custom_attribute_values, function (customAttr) {
+      var value;
+      var obj;
       customAttr = customAttr.reify();
-      customAttrs[customAttrIds[customAttr.custom_attribute_id]] =
-        customAttr.attribute_value;
+      if (customAttr.attribute_object) {
+        obj = customAttr.attribute_object.reify();
+        value = _.filter([obj.email, obj.name, obj.title, obj.slug]);
+      } else {
+        value = customAttr.attribute_value;
+      }
+      customAttrs[customAttrIds[customAttr.custom_attribute_id]] = value;
     });
 
     if (!mappings[longTitle]) {
@@ -1180,9 +1233,14 @@ can.Model("can.Model.Cacheable", {
     keys = _.union(keys, longTitle, _.keys(mappings), _.keys(customAttrs));
     $.each(keys, function (index, key) {
       var attrKey = mappings[key] || key;
-      var val = this[attrKey] || customAttrs[attrKey];
+      var val;
       var owner;
       var audit;
+
+      val = this[attrKey];
+      if (val === undefined) {
+        val = customAttrs[attrKey];
+      }
 
       if (val !== undefined && val !== null) {
         if (key === 'owner' || key === 'owners') {
@@ -1204,13 +1262,15 @@ can.Model("can.Model.Cacheable", {
           if ($.type(val) === 'date') {
             val = val.toISOString().substring(0, 10);
           }
-          if ($.type(val) === 'string') {
+          if ($.type(val) === 'boolean') {
+            val = String(val);
+          }
+          if (_.contains(['string', 'array'], $.type(val))) {
             values[key] = val;
           }
         }
       }
     }.bind(this));
-
     return values;
   },
 

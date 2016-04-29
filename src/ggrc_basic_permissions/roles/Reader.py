@@ -1,9 +1,15 @@
-# Copyright (C) 2015 Google Inc., authors, and contributors <see AUTHORS file>
+# Copyright (C) 2016 Google Inc., authors, and contributors <see AUTHORS file>
 # Licensed under http://www.apache.org/licenses/LICENSE-2.0 <see LICENSE file>
 # Created By: anze@reciprocitylabs.com
 # Maintained By: anze@reciprocitylabs.com
 
+"""A module with configuration of the Reader role's permissions."""
+
+# pylint: disable=invalid-name
+
+
 from ggrc_basic_permissions.roles.Creator import owner_update
+
 
 scope = "System"
 description = """
@@ -18,7 +24,9 @@ permissions = {
         "ControlCategory",
         "ControlAssertion",
         "Control",
+        "Comment",
         "Assessment",
+        "AssessmentTemplate",
         "CustomAttributeDefinition",
         "CustomAttributeValue",
         "Issue",
@@ -59,10 +67,6 @@ permissions = {
         "Person",
         "Program",
         "Request",
-        "Response",
-        "DocumentationResponse",
-        "InterviewResponse",
-        "PopulationSampleResponse",
         "Role",
         "UserRole",
         "Context",
@@ -82,6 +86,7 @@ permissions = {
         "ControlCategory",
         "ControlAssertion",
         "Control",
+        "Comment",
         "Assessment",
         "Issue",
         "DataAsset",

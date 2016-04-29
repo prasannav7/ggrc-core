@@ -1,18 +1,36 @@
 /*!
-    Copyright (C) 2015 Google Inc., authors, and contributors <see AUTHORS file>
-    Licensed under http://www.apache.org/licenses/LICENSE-2.0 <see LICENSE file>
-    Created By: ivan@reciprocitylabs.com
-    Maintained By: ivan@reciprocitylabs.com
+  Copyright (C) 2015 Google Inc., authors, and contributors <see AUTHORS file>
+  Licensed under http://www.apache.org/licenses/LICENSE-2.0 <see LICENSE file>
+  Created By: ivan@reciprocitylabs.com
+  Maintained By: ivan@reciprocitylabs.com
 */
-(function($, GGRC, moment, Permission) {
+
+(function ($, GGRC, moment, Permission) {
+  /**
+   * A module containing various utility functions.
+   */
   GGRC.Utils = {
     firstWorkingDay: function (date) {
       date = moment(date);
       // 6 is Saturday 0 is Sunday
       while (_.contains([0, 6], date.day())) {
-        date.add(1, "day");
+        date.add(1, 'day');
       }
       return date.toDate();
+    },
+    formatDate: function (date, hideTime) {
+      var currentTimezone = moment.tz.guess();
+      var m;
+
+      if (date === undefined || date === null) {
+        return '';
+      }
+
+      m = moment(new Date(date.isComputed ? date() : date));
+      if (hideTime === true) {
+        return m.format('MM/DD/YYYY');
+      }
+      return m.tz(currentTimezone).format('MM/DD/YYYY hh:mm:ss A z');
     },
     getPickerElement: function (picker) {
       return _.find(_.values(picker), function (val) {
@@ -24,7 +42,8 @@
     },
     download: function (filename, text) {
       var element = document.createElement('a');
-      element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+      element.setAttribute(
+        'href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
       element.setAttribute('download', filename);
       element.style.display = 'none';
       document.body.appendChild(element);
@@ -33,21 +52,27 @@
     },
     export_request: function (request) {
       return $.ajax({
-        type: "POST",
-        dataType: "text",
+        type: 'POST',
+        dataType: 'text',
         headers: $.extend({
-          "Content-Type": "application/json",
-          "X-export-view": "blocks",
-          "X-requested-by": "gGRC"
+          'Content-Type': 'application/json',
+          'X-export-view': 'blocks',
+          'X-requested-by': 'gGRC'
         }, request.headers || {}),
-        url: "/_service/export_csv",
+        url: '/_service/export_csv',
         data: JSON.stringify(request.data || {})
       });
     },
-    is_mapped: function (target, destination) {
-      var table_plural = CMS.Models[destination.type].table_plural,
-          bindings = target.get_binding((target.has_binding(table_plural) ? "" : "related_") + table_plural);
+    is_mapped: function (target, destination, mapping) {
+      var tablePlural;
+      var bindings;
 
+      if (_.isUndefined(mapping)) {
+        tablePlural = CMS.Models[destination.type].table_plural;
+        mapping = (target.has_binding(tablePlural) ? '' : 'related_') +
+          tablePlural;
+      }
+      bindings = target.get_binding(mapping);
       if (bindings && bindings.list && bindings.list.length) {
         return _.find(bindings.list, function (item) {
           return item.instance.id === destination.id;

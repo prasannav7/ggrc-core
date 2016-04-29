@@ -3,17 +3,25 @@
 # Created By: miha@reciprocitylabs.com
 # Maintained By: miha@reciprocitylabs.com
 
+"""Handlers used for custom attribute columns."""
+
 from dateutil.parser import parse
 
 from ggrc import db
+from ggrc import models
 from ggrc.converters import errors
 from ggrc.converters.handlers import handlers
-from ggrc import models
 
 _types = models.CustomAttributeDefinition.ValidTypes
 
 
 class CustomAttributeColumHandler(handlers.TextColumnHandler):
+
+  """Custom attribute column handler
+
+  This is a handler for all types of custom attribute column. It works with
+  any custom attribute definition and with mondatory flag on or off.
+  """
 
   _type_handlers = {
       _types.TEXT: lambda self: self.get_text_value(),
@@ -21,20 +29,41 @@ class CustomAttributeColumHandler(handlers.TextColumnHandler):
       _types.DROPDOWN: lambda self: self.get_dropdown_value(),
       _types.CHECKBOX: lambda self: self.get_checkbox_value(),
       _types.RICH_TEXT: lambda self: self.get_rich_text_value(),
+      _types.MAP: lambda self: self.get_person_value(),
   }
 
   def parse_item(self):
+    """Parse raw value from csv file
+
+    Returns:
+      CustomAttributeValue with the correct definition type and value.
+    """
     self.definition = self.get_ca_definition()
     value = models.CustomAttributeValue(custom_attribute_id=self.definition.id)
-    value_handler = self._type_handlers[self.definition.attribute_type]
+    typ = self.definition.attribute_type.split(":")[0]
+    value_handler = self._type_handlers[typ]
     value.attribute_value = value_handler(self)
+    if isinstance(value.attribute_value, models.mixins.Identifiable):
+      obj = value.attribute_value
+      value.attribute_value = obj.__class__.__name__
+      value.attribute_object_id = obj.id
     if value.attribute_value is None:
       return None
     return value
 
   def get_value(self):
+    """Return the value of the custom attrbute field.
+
+    Returns:
+      Text representation if the custom attribute value if it exists, otherwise
+      None.
+    """
+    definition = self.get_ca_definition()
     for value in self.row_converter.obj.custom_attribute_values:
-      if value.custom_attribute_id == self.definition.id:
+      if value.custom_attribute_id == definition.id:
+        if value.custom_attribute.attribute_type.startswith("Map:"):
+          obj = value.attribute_object
+          return getattr(obj, "email", getattr(obj, "slug", None))
         return value.attribute_value
     return None
 
@@ -63,7 +92,7 @@ class CustomAttributeColumHandler(handlers.TextColumnHandler):
     value = None
     try:
       value = parse(self.raw_value)
-    except:
+    except (TypeError, ValueError):
       self.add_warning(errors.WRONG_VALUE, column_name=self.display_name)
     if self.mandatory and value is None:
       self.add_error(errors.MISSING_VALUE_ERROR, column_name=self.display_name)
@@ -82,7 +111,7 @@ class CustomAttributeColumHandler(handlers.TextColumnHandler):
 
   def get_dropdown_value(self):
     choices_list = self.definition.multi_choice_options.split(",")
-    valid_choices = map(unicode.strip, choices_list)  # noqa
+    valid_choices = [val.strip() for val in choices_list]
     choice_map = {choice.lower(): choice for choice in valid_choices}
     value = choice_map.get(self.raw_value.lower())
     if value is None and self.raw_value != "":
@@ -105,3 +134,19 @@ class CustomAttributeColumHandler(handlers.TextColumnHandler):
     if self.mandatory and not self.raw_value:
       self.add_error(errors.MISSING_VALUE_ERROR, column_name=self.display_name)
     return self.raw_value
+
+  def get_person_value(self):
+    """Fetch a person based on the email text in column.
+
+    Returns:
+        Person model instance
+    """
+    if not self.mandatory and self.raw_value == "":
+      return None  # ignore empty fields
+    if self.mandatory and not self.raw_value:
+      self.add_error(errors.MISSING_VALUE_ERROR, column_name=self.display_name)
+      return
+    value = models.Person.query.filter_by(email=self.raw_value).first()
+    if self.mandatory and not value:
+      self.add_error(errors.WRONG_VALUE, column_name=self.display_name)
+    return value

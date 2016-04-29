@@ -12,6 +12,7 @@ permissions = {
         "Audit",
         "Categorization",
         "Category",
+        "Comment",
         "ControlCategory",
         "ControlAssertion",
         "Control",
@@ -50,10 +51,6 @@ permissions = {
         "Program",
         "Role",
         "Request",
-        "Response",
-        "DocumentationResponse",
-        "InterviewResponse",
-        "PopulationSampleResponse",
         "Context",
         {
             "type": "BackgroundTask",
@@ -69,6 +66,7 @@ permissions = {
         "Workflow"
         "Categorization",
         "Category",
+        "Comment",
         "ControlCategory",
         "ControlAssertion",
         "Control",
@@ -106,10 +104,6 @@ permissions = {
         "Role",
         "UserRole",
         "Request",
-        "Response",
-        "DocumentationResponse",
-        "InterviewResponse",
-        "PopulationSampleResponse",
         "Context",
         {
             "type": "BackgroundTask",
@@ -125,9 +119,10 @@ permissions = {
     ],
     "update": [
         "Audit",
-        "Workflow"
+        "Workflow",
         "Categorization",
         "Category",
+        "Comment",
         "ControlCategory",
         "ControlAssertion",
         "Control",
@@ -165,10 +160,6 @@ permissions = {
         "Role",
         "UserRole",
         "Request",
-        "Response",
-        "DocumentationResponse",
-        "InterviewResponse",
-        "PopulationSampleResponse",
         "Context",
         {
             "type": "BackgroundTask",
@@ -184,6 +175,7 @@ permissions = {
         "Workflow"
         "Categorization",
         "Category",
+        "Comment",
         "ControlCategory",
         "ControlAssertion",
         "Control",
@@ -220,10 +212,6 @@ permissions = {
         "Role",
         "UserRole",
         "Request",
-        "Response",
-        "DocumentationResponse",
-        "InterviewResponse",
-        "PopulationSampleResponse",
         "Context",
         {
             "type": "BackgroundTask",

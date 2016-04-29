@@ -3,10 +3,10 @@
 # Created By: david@reciprocitylabs.com
 # Maintained By: miha@reciprocitylabs.com
 
-from .common import *
-from .registry import service
-
 """All gGRC REST services."""
+
+from ggrc.services.common import ReadOnlyResource
+from ggrc.services.registry import service
 
 
 def contributed_services():
@@ -27,6 +27,7 @@ def contributed_services():
       service('contexts', models.Context),
       service('controls', models.Control),
       service('assessments', models.Assessment),
+      service('assessment_templates', models.AssessmentTemplate),
       service('comments', models.Comment),
       service('custom_attribute_definitions',
               models.CustomAttributeDefinition),
@@ -56,10 +57,6 @@ def contributed_services():
       service('programs', models.Program),
       service('relationships', models.Relationship),
       service('requests', models.Request),
-      service('responses', models.Response),
-      service('documentation_responses', models.DocumentationResponse),
-      service('interview_responses', models.InterviewResponse),
-      service('population_sample_responses', models.PopulationSampleResponse),
       service('revisions', models.Revision, ReadOnlyResource),
       service('sections', models.Section),
       service('clauses', models.Clause),

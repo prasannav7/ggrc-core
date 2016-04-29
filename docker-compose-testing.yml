@@ -8,6 +8,7 @@ dev:
   privileged: true
   environment:
    - PYTHONDONTWRITEBYTECODE=true
+   - NODE_PATH=/vagrant-dev/node_modules/
 
 selenium:
   build: .
@@ -20,3 +21,5 @@ selenium:
   environment:
    - PYTHONDONTWRITEBYTECODE=true
    - PYTHONPATH=/selenium/src
+   - SCREEN_WIDTH=1440
+   - SCREEN_HEIGHT=900

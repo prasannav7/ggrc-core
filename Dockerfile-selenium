@@ -1,11 +1,20 @@
-FROM selenium/standalone-chrome-debug
-COPY ./test/selenium /selenium
+# Copyright (C) 2016 Google Inc., authors, and contributors <see AUTHORS file>  
+# Licensed under http://www.apache.org/licenses/LICENSE-2.0 <see LICENSE file>  
+# Created By: miha@reciprocitylabs.com                                           
+# Maintained By: jernej@reciprocitylabs.com
+
+
+FROM selenium/standalone-chrome
+
+USER root
+COPY ./provision/docker/selenium.bashrc.j2 /root/.bashrc
+RUN apt-get update && apt-get install -y python python-pip python-setuptools
+
+COPY ./src/requirements-selenium.txt /tmp/requirements.txt
+RUN pip install pip \
+  && pip install -r /tmp/requirements.txt
+
+RUN usermod -u 1000 seluser
 
 WORKDIR /selenium
-
-RUN apt-get update \
-  && apt-get install -y python python-pip xserver-xephyr
-
-RUN pip install -r /selenium/resources/requirements.txt
-
-COPY ./provision/docker/selenium.bashrc.j2 /root/.bashrc
+USER seluser

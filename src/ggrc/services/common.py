@@ -310,14 +310,14 @@ def log_event(session, obj=None, current_user_id=None):
   if current_user_id is None:
     current_user_id = get_current_user_id()
   cache = get_cache()
-  for o, log_json in cache.dirty.items():
-    revision = Revision(o, current_user_id, 'modified', log_json)
+  for o in cache.dirty:
+    revision = Revision(o, current_user_id, 'modified', o.log_json())
     revisions.append(revision)
-  for o, log_json in cache.deleted.items():
-    revision = Revision(o, current_user_id, 'deleted', log_json)
+  for o in cache.deleted:
+    revision = Revision(o, current_user_id, 'deleted', o.log_json())
     revisions.append(revision)
-  for o, log_json in cache.new.items():
-    revision = Revision(o, current_user_id, 'created', log_json)
+  for o in cache.new:
+    revision = Revision(o, current_user_id, 'created', o.log_json())
     revisions.append(revision)
   if obj is None:
     resource_id = 0
@@ -617,7 +617,7 @@ class Resource(ModelView):
 
   signals = Namespace()
   model_posted = signals.signal(
-      'Model POSTed',
+      "Model POSTed",
       """
       Indicates that a model object was received via POST and will be committed
       to the database. The sender in the signal will be the model class of the
@@ -629,7 +629,7 @@ class Resource(ModelView):
         :service: The instance of Resource handling the POST request.
       """,)
   model_posted_after_commit = signals.signal(
-      'Model POSTed - after',
+      "Model POSTed - after",
       """
       Indicates that a model object was received via POST and has been
       committed to the database. The sender in the signal will be the model
@@ -641,7 +641,7 @@ class Resource(ModelView):
         :service: The instance of Resource handling the POST request.
       """,)
   model_put = signals.signal(
-      'Model PUT',
+      "Model PUT",
       """
       Indicates that a model object update was received via PUT and will be
       updated in the database. The sender in the signal will be the model class
@@ -653,7 +653,7 @@ class Resource(ModelView):
         :service: The instance of Resource handling the PUT request.
       """,)
   model_put_after_commit = signals.signal(
-      'Model PUT - after',
+      "Model PUT - after",
       """
       Indicates that a model object update was received via PUT and has been
       updated in the database. The sender in the signal will be the model class
@@ -665,7 +665,7 @@ class Resource(ModelView):
         :service: The instance of Resource handling the PUT request.
       """,)
   model_deleted = signals.signal(
-      'Model DELETEd',
+      "Model DELETEd",
       """
       Indicates that a model object was DELETEd and will be removed from the
       databse. The sender in the signal will be the model class of the DELETEd
@@ -675,7 +675,7 @@ class Resource(ModelView):
         :service: The instance of Resource handling the DELETE request.
       """,)
   model_deleted_after_commit = signals.signal(
-      'Model DELETEd - after',
+      "Model DELETEd - after",
       """
       Indicates that a model object was DELETEd and has been removed from the
       database. The sender in the signal will be the model class of the DELETEd
@@ -718,6 +718,13 @@ class Resource(ModelView):
         except Exception as e:
           current_app.logger.exception(e)
           raise
+        finally:
+          # When running integration tests, cache sometimes does not clear
+          # correctly
+          if getattr(settings, 'TESTING', False):
+            cache = get_cache()
+            if cache:
+              cache.clear()
 
   def post(*args, **kwargs):
     raise NotImplementedError()
@@ -1175,7 +1182,7 @@ class Resource(ModelView):
           errors.append((res_status, body))
       if len(errors) > 0:
         status = errors[0][0]
-        headers["X-Flash-Error"] = '<hr>'.join((error for _, error in errors))
+        headers["X-Flash-Error"] = ' || '.join((error for _, error in errors))
       else:
         status = 200
     return current_app.make_response(
@@ -1384,22 +1391,22 @@ def filter_resource(resource, depth=0, user_permissions=None):  # noqa
         can_read = False
       if not can_read:
         return None
-    if not user_permissions.is_allowed_read(resource['type'],
-                                            resource['id'], context_id):
-      return None
     else:
-      # Then, filter any typed keys
-      for key, value in resource.items():
-        if key == 'context':
-          # Explicitly allow `context` objects to pass through
-          pass
-        else:
-          # Apply filtering to sub-resources
-          if type(value) is dict and 'type' in value:
-            resource[key] = filter_resource(
-                value, depth=depth + 1, user_permissions=user_permissions)
+      if not user_permissions.is_allowed_read(resource['type'],
+                                              resource['id'], context_id):
+        return None
+    # Then, filter any typed keys
+    for key, value in resource.items():
+      if key == 'context':
+        # Explicitly allow `context` objects to pass through
+        pass
+      else:
+        # Apply filtering to sub-resources
+        if isinstance(value, dict) and 'type' in value:
+          resource[key] = filter_resource(
+              value, depth=depth + 1, user_permissions=user_permissions)
 
-      return resource
+    return resource
   else:
     assert False, "Non-object passed to filter_resource"
 

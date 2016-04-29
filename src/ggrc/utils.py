@@ -4,10 +4,12 @@
 # Maintained By: miha@reciprocitylabs.com
 
 import datetime
-import re
 import json
+import re
+import sqlalchemy
 import sys
 import time
+
 from flask import current_app, request
 from settings import CUSTOM_URL_ROOT
 
@@ -144,10 +146,6 @@ def get_mapping_rules():
   Special cases:
     Aduit has direct mapping to Program with program_id
     Request has a direct mapping to Audit with audit_id
-    Response has a direct mapping to Request with request_id
-    DocumentationResponse has a direct mapping to Request with request_id
-    DocumentationResponse has normal mappings with all other objects in
-    maping modal
     Section has a direct mapping to Standard/Regulation/Poicy with directive_id
     Anything can be mapped to a request, frotent show audit insted
 
@@ -164,32 +162,34 @@ def get_mapping_rules():
   ##################################################################
   # TODO: Read these rules from different modules and combine them here.
   business_object_rules = {
-      "AccessGroup": "Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat",  # noqa
-      "Audit": "Control Assessment Issue Person Program Request history",  # noqa
-      "Clause": "AccessGroup Audit Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat",  # noqa
-      "Contract": "AccessGroup Clause Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Process Product Program Project Request Section System Vendor Risk Threat",  # noqa
-      "Control": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Request Section Standard System Vendor Risk Threat",  # noqa
-      "Assessment": "AccessGroup Audit Clause Contract Control DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Request Section Standard System Vendor Risk Threat",  # noqa
-      "DataAsset": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat",  # noqa
-      "Facility": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat",  # noqa
-      "Issue": "AccessGroup Audit Clause Contract Control Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat",  # noqa
-      "Market": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat",  # noqa
-      "Objective": "AccessGroup Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat",  # noqa
-      "OrgGroup": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat",  # noqa
-      "Person": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Policy Process Product Program Project Regulation Request Request Section Standard System Vendor Risk Threat",  # noqa
-      "Policy": "AccessGroup Clause Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Process Product Program Project Request Section System Vendor Risk Threat",  # noqa
-      "Process": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat",  # noqa
-      "Product": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat",  # noqa
-      "Program": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Project Regulation Request Section Standard System Vendor Risk Threat",  # noqa
-      "Project": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat",  # noqa
-      "Regulation": "AccessGroup Clause Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Process Product Program Project Request Section System Vendor Risk Threat",  # noqa
-      "Request": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat",  # noqa
-      "Section": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat",  # noqa
-      "Standard": "AccessGroup Clause Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Process Product Program Project Request Section System Vendor Risk Threat",  # noqa
-      "System": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat",  # noqa
-      "Vendor": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat",  # noqa
-      "Risk": "AccessGroup Clause Contract Assessment Control DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Threat",  # noqa
-      "Threat": "AccessGroup Clause Contract Assessment Control DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk",  # noqa
+      "AccessGroup": "Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "Audit": "AccessGroup Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor",  # noqa
+      # "AssessmentTemplate": "Audit", # Uncomment this line when we add support for assessment templates in exports # noqa
+      "Clause": "AccessGroup Audit Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "Contract": "AccessGroup Audit Clause Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Process Product Program Project Request Section System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "Control": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Request Section Standard System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "Assessment": "AccessGroup Audit Clause Contract Control DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Request Section Standard System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "DataAsset": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "Facility": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "Issue": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "Market": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "Objective": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "OrgGroup": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "Person": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Policy Process Product Program Project Regulation Request Request Section Standard System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "Policy": "AccessGroup Audit Clause Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Process Product Program Project Request Section System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "Process": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "Product": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "Program": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Project Regulation Request Section Standard System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "Project": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "Regulation": "AccessGroup Audit Clause Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Process Product Program Project Request Section System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "Request": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "Section": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "Standard": "AccessGroup Audit Clause Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Process Product Program Project Request Section System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "System": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "Vendor": "AccessGroup Audit Clause Contract Control Assessment DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat CycleTaskGroupObjectTask",  # noqa
+      "Risk": "AccessGroup Clause Contract Assessment Control DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Threat CycleTaskGroupObjectTask",  # noqa
+      "Threat": "AccessGroup Clause Contract Assessment Control DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk CycleTaskGroupObjectTask",  # noqa
+      "CycleTaskGroupObjectTask": "AccessGroup Clause Contract Assessment Control DataAsset Facility Issue Market Objective OrgGroup Person Policy Process Product Program Project Regulation Request Section Standard System Vendor Risk Threat",  # noqa
   }
 
   split_rules = {k: v.split() for k, v in business_object_rules.items()}
@@ -199,8 +199,7 @@ def get_mapping_rules():
 
 def _prefix_camelcase(name, prefix):
   name = name[:1].lower() + name[1:]
-  callback = lambda pat: prefix + pat.group(0).lower()
-  return re.sub(r'[A-Z]', callback, name)
+  return re.sub(r'[A-Z]', lambda pat: prefix + pat.group(0).lower(), name)
 
 
 def underscore_from_camelcase(name):
@@ -209,6 +208,73 @@ def underscore_from_camelcase(name):
 
 def title_from_camelcase(name):
   return _prefix_camelcase(name, " ")
+
+
+def get_fuzzy_date(delta_date):
+  """Get a human readable date string.
+
+  This function returns a human friendly time delta compared to today.
+
+  Args:
+    delta_date (date): Date that we want to show to the user.
+
+  Returns:
+    string: A human readable representation date delta.
+
+  Examples:
+    >>> get_fuzzy_date(datetime.date.today() + datetime.timedelta(2))
+    'in 2 days'
+    >>> get_fuzzy_date(datetime.date.today())
+    'today'
+    >>> get_fuzzy_date(datetime.date.today() + datetime.timedelta(-1))
+    '1 day ago'
+  """
+  if not delta_date:
+    return ""
+  if isinstance(delta_date, datetime.datetime):
+    delta_date = delta_date.date()
+  delta = delta_date - datetime.date.today()
+  if delta.days < 0:
+    days = abs(delta.days)
+    return "{} day{} ago".format(days, "s" if days > 1 else "")
+  if delta.days == 0:
+    return "today"
+  # TODO: use format_timedelta from babel package.
+  return "in {} day{}".format(delta.days, "s" if delta.days > 1 else "")
+
+
+# pylint: disable=too-few-public-methods
+# because this is a small context manager
+class QueryCounter(object):
+  """Context manager for counting sqlalchemy database queries.
+
+  Usage:
+    with QueryCounter() as counter:
+      query_count = counter.get
+  """
+
+  def __init__(self):
+    self.queries = []
+
+    def after_cursor_execute(*args):
+      self.queries.append(args[2])
+
+    self.listener = after_cursor_execute
+
+  def __enter__(self):
+    sqlalchemy.event.listen(sqlalchemy.engine.Engine,
+                            "after_cursor_execute",
+                            self.listener)
+    return self
+
+  def __exit__(self, *_):
+    sqlalchemy.event.remove(sqlalchemy.engine.Engine,
+                            "after_cursor_execute",
+                            self.listener)
+
+  @property
+  def get(self):
+    return len(self.queries)
 
 
 class BenchmarkContextManager(object):

@@ -1,65 +1,35 @@
 /*
  * Copyright (C) 2016 Google Inc., authors, and contributors <see AUTHORS file>
  * Licensed under http://www.apache.org/licenses/LICENSE-2.0 <see LICENSE file>
- * Created By: brad@reciprocitylabs.com
+ * Created By: vladan@reciprocitylabs.com
  * Maintained By: vladan@reciprocitylabs.com
  */
-
-/* FIXME: Fix for https://github.com/rails/rails/issues/3686
- * - Bump this counter if asset dependencies aren't re-compiled on change
- * counter: 0
- */
-
-// NOTE! Don't use Sprockets 'require' statements inside SASS files
-
-// Required external stylesheets
-
-//@import "jquery-ui";
-
 
 // Whole file is commented. Leaving it for now. WIll be removed later.
 // @import "bootstrap-setup";
 
-@import "bootstrap";
-@import "bootstrap-responsive";
-
-@import "compass/css3";
-//@import "bootstrap-wysihtml5-0.0.2";
+$icon-font-path: "./src/ggrc/assets/vendor/bootstrap-sass/vendor/assets/stylesheets/bootstrap";
+@import "./src/ggrc/assets/vendor/bootstrap-sass/vendor/assets/stylesheets/bootstrap";
+@import "~compass-mixins/lib/compass";
 
 $fa-font-path: "/static/fonts";
-@import "font-awesome";
+@import "~font-awesome/scss/font-awesome";
 
+@import "setup";
 @import "colors";
 @import "mixins";
-@import "setup";
+@import "placeholders";
 @import "typography";
 @import "helpers";
 @import "custom_font_awesome_icons";
 
-@import "common";
-@import "lhs";
+@import "z_index";
 @import "layout";
+@import "modules";
+
+@import "common";
 @import "widget";
 @import "tree";
-@import "footer";
-@import "flash";
-@import "workflow";
 @import "pin";
-@import "tabs";
-@import "risk_assessment";
-@import "styleguide";
-
-// page specific scss
-@import "reg-mapper";
-
-@import "modal";
-
-@import "popover";
-@import "login";
 
 @import "responsive";
-@import "js-helpers";
-
-@import "import-export";
-
-@import "modules";

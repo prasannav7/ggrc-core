@@ -4,22 +4,25 @@
 # Maintained By: dan@reciprocitylabs.com
 
 from uuid import uuid1
+import collections
+import datetime
 
 from flask import current_app
 from sqlalchemy import and_
 from sqlalchemy import event
-from sqlalchemy import or_
+from sqlalchemy import orm
 from sqlalchemy.ext.declarative import declared_attr
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import foreign
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm import validates
 from sqlalchemy.orm.session import Session
 
 from ggrc import db
+from ggrc.models import reflection
+from ggrc.models.computed_property import computed_property
 from ggrc.models.inflector import ModelInflectorDescriptor
 from ggrc.models.reflection import AttributeInfo
-from ggrc.models.computed_property import computed_property
-
 from ggrc.utils import underscore_from_camelcase
 
 """Mixins to add common attributes and relationships. Note, all model classes
@@ -49,7 +52,7 @@ def deferred(column, classname):
 class Identifiable(object):
 
   """A model with an ``id`` property that is the primary key."""
-  id = db.Column(db.Integer, primary_key=True)
+  id = db.Column(db.Integer, primary_key=True)  # noqa
 
   # REST properties
   _publish_attrs = ['id', 'type']
@@ -72,7 +75,6 @@ class Identifiable(object):
 
   @classmethod
   def eager_inclusions(cls, query, include_links):
-    from sqlalchemy import orm
     options = []
     for include_link in include_links:
       inclusion_class = getattr(cls, include_link).property.mapper.class_
@@ -276,8 +278,6 @@ class Hierarchical(object):
 
   @classmethod
   def eager_query(cls):
-    from sqlalchemy import orm
-
     query = super(Hierarchical, cls).eager_query()
     return query.options(
         orm.subqueryload('children'),
@@ -324,11 +324,116 @@ class Stateful(object):
 
   @validates('status')
   def validate_status(self, key, value):
+    # Sqlalchemy only uses one validator per status (not neccessarily the
+    # first) and ignores others. This enables cooperation between validators
+    # since there are other mixins that want to touch 'status'.
+    if hasattr(super(Stateful, self), "validate_status"):
+      value = super(Stateful, self).validate_status(key, value)
     if value is None:
       value = self.default_status()
     if value not in self.valid_statuses():
       message = u"Invalid state '{}'".format(value)
       raise ValueError(message)
+    return value
+
+
+class FinishedDate(object):
+  """Adds 'Finished Date' which is set when status is set to a finished state.
+
+  Requires Stateful to be mixed in as well.
+  """
+
+  NOT_DONE_STATES = None
+  DONE_STATES = {}
+
+  # pylint: disable=method-hidden
+  # because validator only sets date per model instance
+  @declared_attr
+  def finished_date(self):
+    return deferred(
+        db.Column(db.Date, nullable=True),
+        self.__name__
+    )
+
+  _publish_attrs = [
+      reflection.PublishOnly('finished_date')
+  ]
+
+  _aliases = {
+      "finished_date": "Finished Date"
+  }
+
+  @validates('status')
+  def validate_status(self, key, value):
+    """Update finished_date given the right status change."""
+    # Sqlalchemy only uses one validator per status (not neccessarily the
+    # first) and ignores others. This enables cooperation between validators
+    # since 'status' is not defined here.
+    if hasattr(super(FinishedDate, self), "validate_status"):
+      value = super(FinishedDate, self).validate_status(key, value)
+    # pylint: disable=unsupported-membership-test
+    # short circuit
+    if (value in self.DONE_STATES and
+       (self.NOT_DONE_STATES is None or
+           self.status in self.NOT_DONE_STATES)):
+      self.finished_date = datetime.datetime.now()
+    elif ((self.NOT_DONE_STATES is None or
+           value in self.NOT_DONE_STATES) and
+            self.status in self.DONE_STATES):
+      self.finished_date = None
+    return value
+
+
+class VerifiedDate(object):
+  """Adds 'Verified Date' which is set when status is set to 'Verified'.
+
+  When object is verified the status is overriden to 'Final' and the
+  information about verification exposed as the 'verified' boolean.
+  Requires Stateful to be mixed in as well.
+  """
+
+  VERIFIED_STATES = {u"Verified"}
+  DONE_STATES = {}
+
+  # pylint: disable=method-hidden
+  # because validator only sets date per model instance
+  @declared_attr
+  def verified_date(self):
+    return deferred(
+        db.Column(db.Date, nullable=True),
+        self.__name__
+    )
+
+  @hybrid_property
+  def verified(self):
+    return self.verified_date != None  # noqa
+
+  _publish_attrs = [
+      reflection.PublishOnly('verified'),
+      reflection.PublishOnly('verified_date'),
+  ]
+
+  _aliases = {
+      "verified_date": "Verified Date"
+  }
+
+  @validates('status')
+  def validate_status(self, key, value):
+    """Update verified_date on status change, make verified status final."""
+    # Sqlalchemy only uses one validator per status (not neccessarily the
+    # first) and ignores others. This enables cooperation between validators
+    # since 'status' is not defined here.
+    if hasattr(super(VerifiedDate, self), "validate_status"):
+      value = super(VerifiedDate, self).validate_status(key, value)
+    if (value in self.VERIFIED_STATES and
+       self.status not in self.VERIFIED_STATES):
+      self.verified_date = datetime.datetime.now()
+      value = self.FINAL_STATE
+    elif (value not in self.VERIFIED_STATES and
+          value not in self.DONE_STATES and
+          (self.status in self.VERIFIED_STATES or
+           self.status in self.DONE_STATES)):
+      self.verified_date = None
     return value
 
 
@@ -537,8 +642,8 @@ class WithContact(object):
     ).exists()
 
 
-class BusinessObject(
-        Stateful, Noted, Described, Hyperlinked, WithContact, Titled, Slugged):
+class BusinessObject(Stateful, Noted, Described, Hyperlinked, WithContact,
+                     Titled, Slugged):
   VALID_STATES = (
       'Draft',
       'Final',
@@ -575,9 +680,16 @@ class CustomAttributable(object):
   def custom_attributes(cls, attributes):
     from ggrc.fulltext.mysql import MysqlRecordProperty
     from ggrc.models.custom_attribute_value import CustomAttributeValue
+    from ggrc.services import signals
+
     if 'custom_attributes' not in attributes:
       return
+
     attributes = attributes['custom_attributes']
+
+    old_values = collections.defaultdict(list)
+    last_values = dict()
+
     # attributes looks like this:
     #    [ {<id of attribute definition> : attribute value, ... }, ... ]
 
@@ -589,6 +701,17 @@ class CustomAttributable(object):
     attr_value_ids = [v.id for v in attr_values]
     ftrp_properties = [
         "attribute_value_{id}".format(id=_id) for _id in attr_value_ids]
+
+    # Save previous value of custom attribute. This is a bit complicated by
+    # the fact that imports can save multiple values at the time of writing.
+    # old_values holds all previous values of attribute, last_values holds
+    # chronologically last value.
+    for v in attr_values:
+      old_values[v.custom_attribute_id] += [(v.created_at, v.attribute_value)]
+
+    last_values = {str(key): max(old_vals,
+                                 key=lambda (created_at, _): created_at)
+                   for key, old_vals in old_values.iteritems()}
 
     # 2) Delete all fulltext_record_properties for the list of values
     if len(attr_value_ids) > 0:
@@ -608,42 +731,53 @@ class CustomAttributable(object):
 
     # 4) Instantiate custom attribute values for each of the definitions
     #    passed in (keys)
+    # pylint: disable=not-an-iterable
+    definitions = {d.id: d for d in cls.get_custom_attribute_definitions()}
     for ad_id in attributes.keys():
-      av = CustomAttributeValue(
+      obj_type = cls.__class__.__name__
+      obj_id = cls.id
+      new_value = CustomAttributeValue(
           custom_attribute_id=ad_id,
-          attributable_id=cls.id,
-          attributable_type=cls.__class__.__name__,
+          attributable_id=obj_id,
+          attributable_type=obj_type,
           attribute_value=attributes[ad_id],
       )
+      if definitions[int(ad_id)].attribute_type.startswith("Map:"):
+        obj_type, obj_id = new_value.attribute_value.split(":")
+        new_value.attribute_value = obj_type
+        new_value.attribute_object_id = obj_id
       # 5) Set the context_id for each custom attribute value to the context id
       #    of the custom attributable.
       # TODO: We are ignoring contexts for now
-      # av.context_id = cls.context_id
-      db.session.add(av)
+      # new_value.context_id = cls.context_id
+      db.session.add(new_value)
+      if ad_id in last_values:
+        ca, pv = last_values[ad_id]  # created_at, previous_value
+        if pv != attributes[ad_id]:
+          signals.Signals.custom_attribute_changed.send(
+              cls.__class__,
+              obj=cls,
+              src={
+                  "type": obj_type,
+                  "id": obj_id,
+                  "operation": "UPDATE",
+                  "value": new_value,
+                  "old": pv
+              }, service=cls.__class__.__name__)
+      else:
+        signals.Signals.custom_attribute_changed.send(
+            cls.__class__,
+            obj=cls,
+            src={
+                "type": obj_type,
+                "id": obj_id,
+                "operation": "INSERT",
+                "value": new_value,
+            }, service=cls.__class__.__name__)
 
   _publish_attrs = ['custom_attribute_values']
   _update_attrs = ['custom_attributes']
   _include_links = []
-
-  @declared_attr
-  def custom_attribute_definitions(cls):
-    # FIXME definitions should be class scoped, not instance scoped.
-    from ggrc.models.custom_attribute_definition import \
-        CustomAttributeDefinition
-    definition_type = foreign(CustomAttributeDefinition.definition_type)
-
-    def join_function():
-      return or_(
-          definition_type == underscore_from_camelcase(cls.__name__),
-          # The bottom statement always evaluates to False, and is here just to
-          # satisfy sqlalchemys need for use of foreing keys while defining a
-          # relationship.
-          definition_type == cls.id,
-      )
-    return db.relationship(
-        "CustomAttributeDefinition",
-        primaryjoin=join_function
-    )
 
   @classmethod
   def get_custom_attribute_definitions(cls):
@@ -652,6 +786,13 @@ class CustomAttributable(object):
     return CustomAttributeDefinition.query.filter(
         CustomAttributeDefinition.definition_type ==
         underscore_from_camelcase(cls.__name__)).all()
+
+  @classmethod
+  def eager_query(cls):
+    query = super(CustomAttributable, cls).eager_query()
+    return query.options(
+        orm.subqueryload('custom_attribute_values')
+    )
 
 
 class TestPlanned(object):
@@ -665,48 +806,3 @@ class TestPlanned(object):
   _fulltext_attrs = ['test_plan']
   _sanitize_html = ['test_plan']
   _aliases = {"test_plan": "Test Plan"}
-
-
-class Assignable(object):
-
-  ASSIGNEE_TYPES = set(["Assignee"])
-
-  @property
-  def assignees(self):
-    assignees = [(r.source, tuple(r.attrs["AssigneeType"].split(",")))
-                 for r in self.related_sources
-                 if "AssigneeType" in r.attrs]
-    assignees += [(r.destination, tuple(r.attrs["AssigneeType"].split(",")))
-                  for r in self.related_destinations
-                  if "AssigneeType" in r.attrs]
-    return set(assignees)
-
-  @staticmethod
-  def _validate_relationship_attr(cls, source, dest, existing, name, value):
-    """Validator that allows Assignable relationship attributes
-
-    Allow relationship attribute of name "AssigneeType" with value that is a
-    comma separated list of valid roles (as defined in target class).
-
-    Args:
-        cls (class): target class of this mixin. Think of this like a class
-                     method.
-        source (model instance): relevant relationship source
-        dest (model instance): relevant relationship destinations
-        existing (dict): current attributes on the relationship
-        name (string): attribute name
-        value (any): attribute value. Should be string for the right attribute
-
-    Returns:
-        New attribute value (merge with existing roles) or None if the
-        attribute is not valid.
-    """
-    if not set([source.type, dest.type]) == set([cls.__name__, "Person"]):
-      return None
-    if not name == "AssigneeType":
-      return None
-    new_roles = value.split(",")
-    if not all(role in cls.ASSIGNEE_TYPES for role in new_roles):
-      return None
-    roles = set(existing.get(name, "").split(",")) | set(new_roles)
-    return ",".join(role for role in roles if role)

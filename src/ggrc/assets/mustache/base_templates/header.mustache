@@ -10,17 +10,28 @@
     <div class="span9">
       <h6>Title</h6>
       <h3>{{title}}</h3>
-      <span class="state-value state-{{to_class status '_'}}">{{status}}</span>
+      {{#if_helpers '\
+        #if_equals' status "Verified" '\
+        and ^if' instance.verified}}
+          {{! don't show status, because it will be replaced soon }}
+      {{else}}
+        <span class="state-value">{{status}}</span>
+      {{/if_helpers}}
       <span class="gray">
         {{#if request_type}}
           ({{capitalize request_type}})
         {{/if}}
       </span>
+      {{#if verified}}
+      <i class="fa fa-check-circle green"
+         rel="tooltip"
+         title="Verified on {{localize_date verified_date}}"/>
+      {{/if}}
     </div>
     <div class="span3">
       <div class="info-pane-utility">
         <div class="details-wrap">
-          <a class="btn btn-small btn-draft dropdown-toggle" href="#" data-toggle="dropdown">
+          <a class="btn btn-draft dropdown-toggle" href="#" data-toggle="dropdown">
             <span class="bubble"></span>
             <span class="bubble"></span>
             <span class="bubble"></span>

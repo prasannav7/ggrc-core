@@ -316,6 +316,41 @@ Mustache.registerHelper("if_null", function (val1, options) {
   return exec();
 });
 
+  /**
+   * Check if the given argument is a string and render the corresponding
+   * block in the template.
+   *
+   * Example usage:
+   *
+   *   {{#if_string someValue}}
+   *      {{someValue}} is a string
+   *   {{else}}
+   *     {{someValue}} is NOT a string
+   *   {{/if_string}}
+   *
+   * @param {*} thing - the argument to check
+   * @param {Object} options - a CanJS options argument passed to every helper
+   *
+   */
+  Mustache.registerHelper('if_string', function (thing, options) {
+    var resolved;
+
+    if (arguments.length !== 2) {
+      throw new Error(
+        'Invalid number of arguments (' +
+        (arguments.length - 1) +  // do not count the auto-provided options arg
+        '), expected 1.');
+    }
+
+    resolved = Mustache.resolve(thing);
+
+    if (_.isString(resolved)) {
+      return options.fn(options.context);
+    }
+
+    return options.inverse(options.context);
+  });
+
 // Resolve and return the first computed value from a list
 Mustache.registerHelper("firstexist", function () {
   var args = can.makeArray(arguments).slice(0, arguments.length - 1);  // ignore the last argument (some Can object)
@@ -684,18 +719,6 @@ Mustache.registerHelper("iterate_string", function (str, separator, options) {
   return ret.join("");
 });
 
-Mustache.registerHelper("is_private", function (options) {
-  var context = this;
-  if (options.isComputed) {
-    context = resolve_computed(options);
-    options = arguments[1];
-  }
-  if (context && context.attr('private')) {
-    return options.fn(context);
-  }
-  return options.inverse(context);
-});
-
 Mustache.registerHelper("option_select", function (object, attr_name, role, options) {
   var selected_option = object.attr(attr_name)
     , selected_id = selected_option ? selected_option.id : null
@@ -877,6 +900,16 @@ Mustache.registerHelper("show_long", function () {
       })
     , ">...more</a>"
   ].join('');
+});
+
+Mustache.registerHelper('expose', function (options) {
+  var frame = new can.Observe();
+  if (options.hash) {
+    can.each(options.hash, function (val, prop) {
+      frame.attr(prop, Mustache.resolve(val));
+    });
+  }
+  return options.fn(options.contexts.add(frame));
 });
 
 Mustache.registerHelper("using", function (options) {
@@ -1170,20 +1203,16 @@ Mustache.registerHelper("link_to_tree", function () {
   return link.join("/");
 });
 
-// Returns date formated like 01/28/2015 02:59:02am PST
-// To omit time pass in a second parameter {{date updated_at true}}
-Mustache.registerHelper("date", function (date) {
-    if (typeof date == 'undefined')
-      return '';
-  var m = moment(new Date(date.isComputed ? date() : date))
-    , dst = m.isDST()
-    , no_time = arguments.length > 2
-    ;
-
-  if (no_time) {
-    return m.format("MM/DD/YYYY");
-  }
-  return m.utcOffset(dst ? "-0700" : "-0800").format("MM/DD/YYYY hh:mm:ssa") + " " + (dst ? 'PDT' : 'PST');
+/**
+ *  Helper for rendering date or datetime values in current local time
+ *
+ *  @param {boolean} hideTime - if set to true, render date only
+ *  @return {String} - date or datetime string in the following format:
+ *    * date: MM/DD/YYYY),
+ *    * datetime (MM/DD/YYYY hh:mm:ss [PM|AM] [local timezone])
+ */
+Mustache.registerHelper('date', function (date, hideTime) {
+  return GGRC.Utils.formatDate(date, hideTime);
 });
 
 /**
@@ -1813,7 +1842,7 @@ Mustache.registerHelper("is_profile", function (parent_instance, options) {
   else
     options = parent_instance;
 
-  if (GGRC.page_instance() instanceof CMS.Models.Person && (!instance || instance.constructor.shortName !== 'DocumentationResponse'))
+  if (GGRC.page_instance() instanceof CMS.Models.Person)
     return options.fn(options.contexts);
   else
     return options.inverse(options.contexts);
@@ -2241,11 +2270,6 @@ Mustache.registerHelper("prune_context", function (options) {
   return options.fn(new can.view.Scope(options.context));
 });
 
-// Turns DocumentationResponse to Response
-Mustache.registerHelper("type_to_readable", function (str, options) {
-  return resolve_computed(str, true).replace(/([A-Z])/g, ' $1').split(' ').pop();
-});
-
 Mustache.registerHelper("mixed_content_check", function (url, options) {
   url = Mustache.getHelper("schemed_url", options.contexts).fn(url);
   if (window.location.protocol === "https:" && !/^https:/.test(url)) {
@@ -2441,20 +2465,6 @@ can.each({
           || options.can_assignee_edit
           || options.can_program_editor_edit
           || (!options.accepted
-              && (options.update
-                || options.map
-                || options.create));
-    }
-  },
-  "if_can_create_response": {
-    assignee_states: ["Requested", "Amended Request"],
-    program_editor_states: ["Requested", "Amended Request"],
-    predicate: function(options) {
-      return (!options.draft && (options.admin || options.editor))
-          || options.can_assignee_edit
-          || options.can_program_editor_edit
-          || (!options.accepted
-              && !options.draft
               && (options.update
                 || options.map
                 || options.create));
@@ -3164,33 +3174,43 @@ Mustache.registerHelper('get_url_value', function (attr_name, instance) {
     function (attrName, instance) {
       // attribute names considered "default" and representing a date
       var DATE_ATTRS = Object.freeze({
-        start_date: 1,
+        due_on: 1,
         end_date: 1,
-        updated_at: 1,
+        finished_date: 1,
         requested_on: 1,
-        due_on: 1
+        start_date: 1,
+        updated_at: 1,
+        verified_date: 1
       });
 
       // attribute names considered "default" and not representing a date
       var NON_DATE_ATTRS = Object.freeze({
+        kind: 1,
+        reference_url: 1,
+        request_type: 1,
         slug: 1,
         status: 1,
         url: 1,
-        reference_url: 1,
-        kind: 1,
-        request_type: 1
+        verified: 1
       });
+
+      var res;
 
       instance = Mustache.resolve(instance);
       attrName = Mustache.resolve(attrName);
 
-      if (instance.attr(attrName)) {
+      res = instance.attr(attrName);
+
+      if (res !== undefined && res !== null) {
         if (attrName in NON_DATE_ATTRS) {
-          return instance.attr(attrName);
+          if ($.type(res) === 'boolean') {
+            res = String(res);
+          }
+          return res;
         }
         if (attrName in DATE_ATTRS) {
           // convert to a localized date
-          return moment(instance.attr(attrName)).format('MM/DD/YYYY');
+          return moment(res).format('MM/DD/YYYY');
         }
       }
 
@@ -3201,26 +3221,31 @@ Mustache.registerHelper('get_url_value', function (attr_name, instance) {
 /*
   Used to get the string value for custom attributes
 */
-Mustache.registerHelper('get_custom_attr_value', function (attr_info, instance) {
-  var ins, atr, ins_type, attr_name, value = '', custom_attr_id = 0,
-      custom_attr_defs = GGRC.custom_attr_defs;
+Mustache.registerHelper('get_custom_attr_value', function (attr, instance, options) {
+  var value = '';
+  var definition;
 
-  ins = Mustache.resolve(instance);
-  ins_type = ins.class.table_singular;
-  atr = Mustache.resolve(attr_info);
-  attr_name = atr.attr_name;
+  attr = Mustache.resolve(attr);
+  instance = Mustache.resolve(instance);
 
-  can.each(custom_attr_defs, function (item) {
-    if (item.definition_type === ins_type && item.title === attr_name) {
-      custom_attr_id = item.id;
+  can.each(GGRC.custom_attr_defs, function (item) {
+    if (item.definition_type === instance.class.table_singular &&
+        item.title === attr.attr_name) {
+      definition = item;
     }
   });
 
-  if (custom_attr_id) {
-    can.each(ins.custom_attribute_values, function (item) {
+  if (definition) {
+    can.each(instance.custom_attribute_values, function (item) {
       item = item.reify();
-      if (item.custom_attribute_id === custom_attr_id) {
-        value = item.attribute_value;
+      if (item.custom_attribute_id === definition.id) {
+        if (definition.attribute_type.startsWith('Map:')) {
+          value = options.fn(options.contexts.add({
+            object: item.attribute_object.reify()
+          }));
+        } else {
+          value = item.attribute_value;
+        }
       }
     });
   }
@@ -3240,7 +3265,7 @@ Mustache.registerHelper("with_create_issue_json", function (instance, options) {
 
   audit = audits[0].instance.reify();
   programs = audit.get_mapping("_program");
-  program = programs[0].instance.reify();
+  program = programs.length ? programs[0].instance.reify() : {};
   control = instance.control ? instance.control.reify() : {};
   related_controls = instance.get_mapping('related_controls');
 
@@ -3295,6 +3320,36 @@ Mustache.registerHelper("add_to_current_scope", function (options) {
   return options.fn(options.contexts.add(_.extend({}, options.context, options.hash)));
 });
 
+  /**
+   * Return a value of a CMS.Model constructor's property.
+   *
+   * If a Model is not found, an error is raised. If a property does not exist
+   * on the model, undefined is returned.
+   *
+   * @param {String} modelName - the name of the Model to inspect
+   * @param {String} attr - the name of a modelName's property
+   *
+   * @return {*} - the value of the modelName[attr]
+   */
+  Mustache.registerHelper('model_info', function (modelName, attr, options) {
+    var model;
+
+    if (arguments.length !== 3) {
+      throw new Error(
+        'Invalid number of arguments (' +
+        (arguments.length - 1) +  // do not count the auto-provided options arg
+        '), expected 2.');
+    }
+
+    model = CMS.Models[modelName];
+
+    if (typeof model === 'undefined') {
+      throw new Error('Model not found (' + modelName + ').');
+    }
+
+    return model[attr];
+  });
+
 /*
 Add spaces to a CamelCase string.
 
@@ -3315,5 +3370,4 @@ Mustache.registerHelper("un_camel_case", function (str, options) {
   }
   return newval;
 });
-
 })(this, jQuery, can);

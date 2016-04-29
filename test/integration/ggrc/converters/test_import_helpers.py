@@ -319,6 +319,9 @@ class TestGetObjectColumnDefinitions(TestCase):
         "Test Plan",
         "Audit",
         "Owner",
+        "Assessor",
+        "Verifier",
+        "Creator",
         "Primary Contact",
         "Secondary Contact",
         "Assessment URL",
@@ -326,9 +329,13 @@ class TestGetObjectColumnDefinitions(TestCase):
         "Code",
         "Effective Date",
         "Stop Date",
+        "Verified Date",
+        "Finished Date",
         "State",
         "Conclusion: Design",
         "Conclusion: Operation",
+        "Recipients",
+        "Send by default",
         "Delete",
     }
     expected_names = element_names.union(mapping_names)
@@ -883,7 +890,7 @@ class TestGetObjectColumnDefinitions(TestCase):
     self.assertTrue(vals["Title"]["unique"])
 
   def test_request_definitions(self):
-    """ test default headers for Request """
+    """Test default headers for Request."""
 
     names = {
         "Assignee",
@@ -895,7 +902,11 @@ class TestGetObjectColumnDefinitions(TestCase):
         "Notes",
         "Request Type",
         "Requested On",
+        "Verified Date",
+        "Finished Date",
         "Requester",
+        "Recipients",
+        "Send by default",
         "Status",
         "Test",
         "Title",
@@ -997,8 +1008,10 @@ class TestGetWorkflowObjectColumnDefinitions(TestCase):
     """ test default headers for Cycle Task Group Object Task """
     definitions = get_object_column_definitions(
         wf_models.CycleTaskGroupObjectTask)
+    mapping_names = get_mapping_names(
+        wf_models.CycleTaskGroupObjectTask.__name__)
     display_names = {val["display_name"] for val in definitions.values()}
-    expected_names = {
+    element_names = {
         "Code",
         "Cycle",
         "Summary",
@@ -1010,10 +1023,10 @@ class TestGetWorkflowObjectColumnDefinitions(TestCase):
         "Actual Verified Date",
         "Actual Finish Date",
         "Task Group",
-        "Cycle Object",
         "State",
         "Delete",
     }
+    expected_names = element_names.union(mapping_names)
     self.assertEqual(expected_names, display_names)
     vals = {val["display_name"]: val for val in definitions.values()}
     self.assertTrue(vals["Summary"]["mandatory"])

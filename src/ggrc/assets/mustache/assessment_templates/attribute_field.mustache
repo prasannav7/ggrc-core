@@ -1,0 +1,38 @@
+{{!
+  Copyright (C) 2016 Google Inc., authors, and contributors <see AUTHORS file>
+  Licensed under http://www.apache.org/licenses/LICENSE-2.0 <see LICENSE file>
+  Created By: ivan@reciprocitylabs.com
+  Maintained By: ivan@reciprocitylabs.com
+}}
+
+{{^field._pending_delete}}
+<li class="row-fluid">
+  <div class="span-custom2-and-half">{{field.title}}</div>
+  <div class="span-custom1-and-half">{{field.attribute_type}}</div>
+  <div class="span2">
+    {{#attrs}}
+      <span class="block">{{.}}</span>
+    {{/attrs}}
+  </div>
+  <div class="span2 centered checkbox-wrap">
+    {{#attrs}}
+      <input can-value="field.opts.attachment-{{.}}" type="checkbox">
+    {{/attrs}}
+  </div>
+  <div class="span1 centered checkbox-wrap">
+    {{#attrs}}
+      <input can-value="field.opts.comment-{{.}}" type="checkbox">
+    {{/attrs}}
+  </div>
+  <div class="span1 centered checkbox-wrap">
+    <input type="checkbox" can-value="field.mandatory">
+  </div>
+  <div class="span2">
+    <div class="pull-right">
+      {{#field}}
+        <a can-click="removeField" href="#"><i class="fa fa-trash"></i></a>
+      {{/field}}
+    </div>
+  </div>
+</li>
+{{/field._pending_delete}}

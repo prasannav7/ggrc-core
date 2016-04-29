@@ -1,27 +1,26 @@
 Google Governance, Risk and Compliance (GGRC)
 =========
 
-[![Travis status](https://travis-ci.org/google/ggrc-core.svg?branch=develop)](https://travis-ci.org/google/ggrc-core)
-[![Code Climate](https://codeclimate.com/github/google/ggrc-core/badges/gpa.svg)](https://codeclimate.com/github/google/ggrc-core)
+[![Build Status](https://jenkins.reciprocitylabs.com/job/ggrc_develop_build/badge/icon)](https://jenkins.reciprocitylabs.com/job/ggrc_develop_build/)
 
-Governance, Risk Management, and Compliance are activities necessary for any organization with regulatory or contractual obligations. 
+Governance, Risk Management, and Compliance are activities necessary for any organization with regulatory or contractual obligations.
 
-Governance refers to management structure, policies, procedures, shareholder relations, etc. 
+Governance refers to management structure, policies, procedures, shareholder relations, etc.
 
-Risk Management is a process to identify business and technical risks as well as means to mitigate those. 
+Risk Management is a process to identify business and technical risks as well as means to mitigate those.
 
-Compliance refers to processes necessary to meet applicable regulations and communicate to stakeholders about it.  
+Compliance refers to processes necessary to meet applicable regulations and communicate to stakeholders about it.
 
-Many organizations operate in multiple jurisdictions worldwide, each of which has its own and often overlapping laws and regulations.   Organizational functions and information relating to risk management and compliance often tend to be managed in silos reflecting the multiple jurisdictions, scope, stakeholder diversity and historical basis.   This leads to inefficiency.  
+Many organizations operate in multiple jurisdictions worldwide, each of which has its own and often overlapping laws and regulations.   Organizational functions and information relating to risk management and compliance often tend to be managed in silos reflecting the multiple jurisdictions, scope, stakeholder diversity and historical basis.   This leads to inefficiency.
 
 The GGRC project intends to provide an open source solution for managing some of these common problems.  The application provides a common system of record for information in this domain.   It provides the ability to capture the relationships and to understand how the pieces fit together.  It also provides workflow capability to manage processes in this domain.
 
 
-Migrated from [Google](https://code.google.com/p/compliance-management/)
-[Code](https://code.google.com/p/ggrc-core).
+Migrated from [Google](https://code.google.com/archive/p/compliance-management)
+[Code](https://code.google.com/archive/p/ggrc-core).
 
-Requirements
-------------
+
+## Requirements
 
 The following software is required to stand up a GGRC-Core development
 environment:
@@ -29,8 +28,8 @@ environment:
 |               Prerequisite               |               Description                |
 |------------------------------------------|------------------------------------------|
 |[VirtualBox](https://www.virtualbox.org/) | Oracle VirtualBox Virtual Machine player |
-|[Vagrant](http://www.vagrantup.com/)      | Handy scriptable VM management           |
-|[Ansible](http://www.ansible.com/home)    | Provisioning and deployment tool         |
+|[Vagrant](https://www.vagrantup.com/)      | Handy scriptable VM management           |
+|[Ansible](https://www.ansible.com/)    | Provisioning and deployment tool         |
 
 Or alternatively (see Quickstart with docker)
 
@@ -39,15 +38,15 @@ Or alternatively (see Quickstart with docker)
 |[Docker](https://www.docker.com/)                 | Container management tool                |
 |[Docker compose](https://docs.docker.com/compose/)| A tool for defining multi-container apps |
 
-Quick Start
------------
+
+## Quick Start
 
 Getting started with GGRC-Core development should be fast and easy once you
 have the prerequisite software installed. Here are the steps:
 
 * clone the repo
 * cd to the project directory
-* make sure your ansible installation is up-to-date i.e. version 1.9.3 or higher (if it's not in the repositories, you can
+* make sure you use ansible version 1.9.X (if it's not in the repositories, you can
 install it via pip)
 * run the following:
 
@@ -55,9 +54,9 @@ install it via pip)
     git submodule update --init
     vagrant up
     vagrant ssh
-    build_compass
+    build_css
     build_assets
-    db_migrate
+    db_reset
     ```
 
 If you see download errors during the `vagrant up` stage, or if any subsequent
@@ -66,27 +65,31 @@ VM](#provision-a-running-vagrant-vm) below for more).
 
 Now you're in the VM and ready to rock. Get to work!
 
-### Quickstart with docker
+## Quickstart with docker
 
 Alternative setup is using just docker. Run a vagrant-like fat docker container
-named *ggrccore_dev_1* with this command (from the repo root)
+named *ggrccore_dev_1*.
 
-    docker-compose up
 
-Add `-d` to automatically daemonize.
-To enter a running container run
+* clone the repo
+* cd to the project
+directory
+* run the following:
 
+    ```
+    git submodule update --init
+    docker-compose up -d
     docker exec -it ggrccore_dev_1 su vagrant
-
-And then continue just like with vagrant
-
-    build_compass
+    make bower_components
+    build_css
     build_assets
-    db_migrate
+    db_reset
+    ```
 
-`docker-compose` will manage the containers for you. If you want to reuse old container use
+If you see download errors during the `docker-compose up -d` stage, or if any subsequent
+step fails, try running `docker-compose build` (See [Reprovisioning a Docker container](#reprovisioning-a-docker-container) below for more).
 
-    docker-compose --no-recreate
+_NOTE: Because docker shared volumes do not have permission mappings, you should run these commands as a user with UID 1000, to match the users inside the containers._
 
 ### Launching GGRC as Stand-alone Flask
 
@@ -107,25 +110,34 @@ launching the application in the Google App Engine SDK environment is simple:
 launch_gae_ggrc
 ```
 
-This requires `src/app.yaml` with settings. You can generate one for
-development with:
+This requires `src/app.yaml` and `src/packages.zip` with settings. You can generate the yaml file with:
 
 ```sh
 deploy_appengine extras/deploy_settings_local.sh
 ```
+
+And the packages.zip file with:
+
+
+```
+make appengine_packages_zip
+```
+
+
 
 ### Accessing the Application
 
 The application will be accessible via this URL: <http://localhost:8080/>
 
 If you're running the Google App Engine SDK, the App Engine management console
-will be avaiable via this URL: <http://localhost:8000/>
+will be avaiable via this URL: <http://localhost:8000/>. You can login as
+user@example.com with admin rights and setup other users later.
 
-### Running Tests
+## Running Tests
 
 Tests are your friend! Keep them running, keep them updated.
 
-##### For JavaScript tests:
+#### For JavaScript tests:
 
 ```sh
 run_karma
@@ -133,7 +145,7 @@ run_karma
 
 Then open Chrome at URL: <http://localhost:9876>
 
-##### For Python tests:
+#### For Python tests:
 
 ```sh
 run_pytests
@@ -148,7 +160,7 @@ This will run the tests on each file update.
 cd test/unit; sniffer
 ```
 
-##### For Selenium tests:
+#### For Selenium tests:
 
 On the host machine in the root of the repository run:
 
@@ -156,8 +168,39 @@ On the host machine in the root of the repository run:
 ./bin/jenkins/run_selenium
 ```
 
-Quickstart Breakdown
---------------------
+##### Manually running selenium tests
+
+For selenium tests, you must use the docker environment. There are two containers needed for running seleium tests `ggrccore_dev_1` and `ggrccore_selenium_1`. Due to a bug in the selenium container, you must start the containers with:
+
+```
+docker-compose  up -d --force-recreate
+```
+After that you can make sure that both containers are running with `docker ps -a`.
+
+To run the selenium tests, you must login into your dev container, and run the server:
+```
+docker exec -it ggrccore_dev_1 su vagrant
+make bower_components
+build_css
+build_assets
+db_reset
+launch_ggrc
+```
+
+Then you can login into the selenium container and run the tests:
+
+```
+docker exec -it ggrccore_selenium_1 bash
+python /selenium/src/run_selenium.py
+```
+
+You should also feel free to check how the `./bin/jenkins/run_selenium` script works.
+
+_NOTE: that the "ggrccore" part of the name is due to the repository parent folder name. if you have your repo in a different folder, change the first part acordingly._
+
+
+## Quickstart Breakdown
+
 
 The quickstart above gives a glimpse into the GGRC development environment.
 It's worth noting where there is automation in GGRC, and where there isn't.
@@ -172,20 +215,8 @@ repositories checked out as Git submodules the following command must be
 issued in the project directory:
 
 ```sh
-git submodule init
+git submodule update --init
 ```
-
-The lack of automation for this step is intentional. First, it must be done in
-the host operating system, not the Vagrant virtual machine. Second, performing
-this step informs the new GGRC developer that there are Git submodules to be
-concerned about, leading to the second step:
-
-```sh
-git submodule update
-```
-
-As the dependencies change over time it will be necessary for developers to
-update to a new revision for one or more of the submodules.
 
 ### Ansible
 
@@ -249,6 +280,28 @@ vagrant destroy
 vagrant up
 ```
 
+#### Reprovisioning a Docker container
+
+To reprovision a docker container run the following:
+
+Remove files that are not in the repository e.g. python cache:
+```sh
+git clean -df
+```
+Start reprovisioning:
+```sh
+docker-compose build --pull --no-cache
+```
+
+Because docker provisioning is done with Dockerfile which can not modify content of a shared volume, you need to enter the container and run one more step to finish the provisioning
+
+```
+docker-compose up -d --force-recreate
+docker exec -it ggrccore_dev_1 su vagrant
+make bower_components
+```
+
+
 ### Compiling Sass Templates
 
 Since GGRC uses Sass for CSS templating, the templates need to be compiled.
@@ -256,14 +309,14 @@ This has been automated via a script available in $PATH in the virtual
 machine:
 
 ```sh
-build_compass
+build_css
 ```
 
 To have a process watch the Sass resources and compile them as they are changed
 you could use this command:
 
 ```sh
-watch_compass
+watch_css
 ```
 
 ### Compiling Assets
@@ -274,7 +327,7 @@ For other asset bundling required, there is the following command:
 build_assets
 ```
 
-As for Compass, there is an asset builder that can watch for changes and update
+As for CSS, there is an asset builder that can watch for changes and update
 files as they change:
 
 ```sh
@@ -286,30 +339,26 @@ watch_assets
 Example test data can be loaded with the following command:
 
 ```sh
-mysql -u root -p ggrcdev < backup-file.sql
+db_reset backup-file.sql
 ```
 
-Gotchas
--------
+## Gotchas
 
 After sync'ing your local clone of GGRC-Core you may experience a failure when
 trying to run the application due to a change (usually an addition) to the
 prerequisites.
 
-There are three primary classes of requirements for GGRC-Core: submodules,
-cookbooks and Python packages. Cookbooks are managed via specification in the
-`Cheffile` while Python packages are managed via specification in
-[pip](https://en.wikipedia.org/wiki/Pip_(package_manager)) requirements files.
+There are three primary classes of requirements for GGRC-Core: Submodules, Python requirements and other provision steps
 
 There are two pip requirements files: a runtime requirements file,
 `src/requirements.txt`, for application package dependencies and a
-development requirements file, `src/dev-requirements.txt`, for additional
+development requirements file, `src/requirements-dev.txt`, for additional
 development-time package dependencies. The runtime requirements are deployed
 with the application while the development requirements are only used in the
 development environment (largely for testing purposes).
 
 Most requirements changes should be in either `src/requirements.txt` or
-`src/dev-requirements.txt` and would manifest as module import failures.
+`src/requirements-dev.txt` and would manifest as module import failures.
 
 ### Environment Variables
 
@@ -343,51 +392,38 @@ filesystem at `/vagrant`.)
 
 The first thing to try to resolve issues due to missing prerequisites is to
 run the following command from within the project directory in the host
-operating system (what you're running the VM on):
+operating system:
 
 ```sh
 vagrant provision
 ```
 
-This will prompt vagrant to run the Chef provisioner. The result of this
-command *should* be an update Python virtualenv containing the Python packages
-required by the application as well as any new development package
-requirements. However, this may not be the case and you may experience a
-provisioning failure due to a change to `Cheffile`.
-
-Running `vagrant provision` will run the following in the VM to update the
-development environment.
+or if you're using docker:
 
 ```sh
-make
-pip install -r src/dev-requirements.txt
-pip install --no-deps -r src/requirements.txt
+docker-compose build
+```
+
+
+This will prompt vagrant to run the Ansible provisioner or docker to rebuild the containers. The result of this
+command *should* be an update Python virtualenv containing the Python packages
+required by the application as well as any new development package
+requirements.
+
+To Manually update the requirements, you can login to vagrant or docker virtual machine and run
+
+```sh
+pip install -r src/requirements-dev.txt
+pip install --no-deps -r src/requirements-basic.txt
 ```
 
 Note that if you're using `launch_gae_ggrc`, then changes to
 `src/requirements.txt` will require rebuilding the `src/packages.zip` via
-`make appengine_packages_zip`. (This is also handled by the `make` step
-run via `vagrant provision`.)
 
-### Cheffile Changes
-
-The addition of cookbooks to the project prerequisites can lead to provisioning
-failures. The solution is to update the cookbooks in the `cookbooks` directory
-by issuing the following commands from within the project directory:
-
-```sh
-librarian-chef install
-vagrant provision
+```
+make appengine_packages_zip
 ```
 
-### Changes to `site-cookbooks`
-
-Changes to the recipes defined by GGRC itself can also lead to errors. The
-solution is to reprovision the Vagrant VM:
-
-```sh
-vagrant provision
-```
 
 ### Git Submodule Changes
 
@@ -404,7 +440,7 @@ requirements of GGRC, it may also be necessary to rebuild the Sass and other
 web assets:
 
 ```sh
-build_compass
+build_css
 build_assets
 ```
 

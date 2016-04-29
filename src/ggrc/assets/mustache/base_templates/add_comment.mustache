@@ -5,6 +5,16 @@
     Maintained By: ivan@reciprocitylabs.com
 }}
 <div class="add-comment">
+  {{^if_null parent_instance._mandatory_comment_msg}}
+    <div class="row-fluid">
+      <div class="span8">
+        <div class="alert alert-info alert-dismissible" role="alert">
+          {{parent_instance._mandatory_comment_msg}}
+          <button type="button" class="close" data-dismiss="alert" aria-label="Close">&times;</button>
+        </div>
+      </div>
+    </div>
+  {{/if_null}}
   <div class="row-fluid">
     <div class="span8">
       <div class="controls top">
@@ -42,8 +52,13 @@
         {{/instance._pending_joins}}
         </ul>
       </div>
-      <div class="controls">
-        <a href="javascript://" class="btn btn-success btn-small">Add</a>
+      <div class="controls clearfix">
+        <a href="javascript://" class="btn btn-success btn-small pull-left">Add</a>
+        <label class="input--inline pull-left">
+          <input type="checkbox" name="send_notification"
+            {{#parent_instance.send_by_default}}checked{{/send_by_default}}>
+          Send Notifications
+        </label>
       </div>
     </div>
   </div>
